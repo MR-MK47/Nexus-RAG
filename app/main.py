@@ -137,5 +137,6 @@ def query_docs(request: QueryRequest):
 # --- Server Startup ---
 # This block allows the server to be started directly by running `python -m app.main`
 # It is not inside an `if __name__ == "__main__"` block to ensure it runs in module mode.
-import uvicorn
-uvicorn.run(app, host="127.0.0.1", port=8000)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
