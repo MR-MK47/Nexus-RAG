@@ -1,0 +1,15 @@
+# Configuration for the RAG pipeline
+
+# Path to store the source documents (relative to project root)
+data_path: "data/docs"
+
+# Path to store the generated FAISS vector indexes (relative to project root)
+vector_store_path: "data/vector_store"
+
+# The embedding model to use from Hugging Face
+embedding_model: "all-MiniLM-L6-v2"
+
+# Settings for splitting documents into chunks
+text_splitter:
+  chunk_size: 1000
+  chunk_overlap: 100
