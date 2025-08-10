@@ -1,17 +1,17 @@
 # Core web framework
-fastapi>=0.116.1
-uvicorn>=0.35.0
-streamlit>=1.47.1
+fastapi
+uvicorn
 
 # Embeddings and LLM tooling
-sentence-transformers>=5.0.0
-langchain>=0.3.26
-openai>=1.97.1
-google-generativeai>=0.8.5
+openai
 
 # Document handling
-python-docx>=1.2.0
-pymupdf>=1.26.3
+python-multipart
+
+# Utilities
+faiss-cpu
+
+python-dotenv
 python-multipart>=0.0.20
 unstructured>=0.18.9
 

@@ -1,134 +1,99 @@
-# VeriSure AI - Bajaj Finserv Hackathon Submission
 
-## 🚀 Overview
+# Nexus RAG 🚀
 
-VeriSure AI is a smart document reasoning system built for the **Bajaj Finserv Hackathon**. It allows users to upload one or more insurance policy documents and then ask natural language questions about them. The system uses **FAISS for semantic retrieval** and **Gemini 1.5 Flash for reasoning**, returning structured decisions in JSON format.
+Nexus RAG is an intelligent Q&A application that allows you to chat with your documents. It uses a Retrieval-Augmented Generation (RAG) pipeline, powered by the **Google Gemini API**, to provide accurate answers based on the content of your uploaded PDF files.
 
-> ⚠️ Although I can't participate in the hackathon because my team isn't eligible, a project is still a project, and sarcasm is my coping mechanism. 😎
+## Features
 
----
+-   **Document Q&A**: Upload one or more PDF documents and ask questions in natural language.
+    
+-   **Explainable AI**: Each answer is accompanied by a rationale explaining how the conclusion was reached, providing transparency and trust.
+    
+-   **Evidence-Based Answers**: The UI includes an expandable "Show Evidence" section that displays the exact source text used to generate the answer.
+    
+-   **Simple & Intuitive UI**: A clean and user-friendly interface built with Streamlit.
+    
+-   **Robust Backend**: A scalable FastAPI backend handles document processing, the RAG pipeline, and the judge's submission API.
+    
 
-## 🎯 Problem Statement
+## How It Works
 
-In real-world insurance settings, understanding the clauses and conditions of policy documents is time-consuming and error-prone. This project solves that by:
+1.  **Upload**: The user uploads PDF documents through the Streamlit interface.
+    
+2.  **Ingest & Index**: The backend processes the documents, splits them into text chunks, and creates a searchable vector index using FAISS.
+    
+3.  **Query & Retrieve**: When a user asks a question, the system retrieves the most relevant text chunks from the index.
+    
+4.  **Generate & Display**: The retrieved chunks and the original question are sent to the **Gemini 1.5 Flash model**, which generates a final answer and a decision rationale. This structured response is then displayed in the UI.
+    
 
-* Parsing uploaded policy documents
-* Semantically retrieving relevant clauses
-* Generating smart, justified decisions
+## Setup and Installation
 
-Problem Statement : [HackRx6.0](https://hackrx.in/#problem-statement)
+Follow these steps to get Nexus RAG running locally.
 
----
+### Prerequisites
 
-## ✅ Features
+-   Python 3.9+
+    
+-   A Google Gemini API key from [Google AI Studio](https://aistudio.google.com/ "null").
+    
 
-* **Multi-file Upload**: Upload one or more `.pdf` or `.docx` files
-* **Session-wise Indexing**: Each session gets its own FAISS index and metadata folder
-* **Semantic Clause Search**: Questions retrieve the most relevant document chunks
-* **Structured Decision Output**: Gemini responds with a JSON decision object
-* **Streamlit Frontend**: Easy-to-use UI for upload and querying
-
----
-
-## 🧠 Tech Stack
-
-| Component     | Tech/Tool                       | Version                      |
-| ------------- | ------------------------------- | ---------------------------- |
-| Backend       | FastAPI                         | 0.110.0                      |
-| Embedding     | SentenceTransformers (MiniLM)   | sentence-transformers==2.2.2 |
-| Vector Search | FAISS                           | faiss-cpu==1.7.4             |
-| LLM           | Gemini 1.5 Flash (Google AI)    | gemini-1.5-flash             |
-| Frontend      | Streamlit                       | 1.33.0                       |
-| Data Storage  | Session-wise folders in `/data` | -                            |
-
----
-
-## 🧩 Version Breakdown
-
-### ✅ Version 1 (V1)
-
-* Single document upload
-* Static FAISS index location
-* Basic query interface with Gemini output
-
-### 🔁 Version 2 (V2)
-
-* Multi-document upload in one session
-* Dynamic FAISS index creation (`session_<timestamp>`) for isolation
-* Stored session ID used during querying
-* Fully integrated frontend with upload → query loop
-
----
-
-## 🗂️ Folder Structure
+### 1. Clone the Repository
 
 ```
-project/
-├── app/
-│   ├── core/
-│   │   ├── engine.py        # Gemini prompting logic
-│   │   ├── retriever.py     # FAISS index building & querying
-│   │   └── embedder.py      # Text embeddings
-│   ├── ingestion/
-│   │   ├── load.py          # Load content from files
-│   │   └── chunk.py         # Chunk raw text
-│   └── main.py              # FastAPI app
-├── ui/
-│   └── app.py               # Streamlit interface
-├── data/
-│   └── session_<id>/index/  # Saved FAISS index + chunks
-├── config/
-│   └── config.yaml          # API keys and settings
-```
-Mermaid Diagram : [VeriSureAI](VeriSureAI.svg)
----
+git clone [https://github.com/MR-MK47/Nexus-RAG.git](https://github.com/MR-MK47/Nexus-RAG.git)
+cd Nexus-RAG
 
-## 🔍 Sample Output
-
-**Query**: *"Is cataract surgery covered?"*
-
-**Output JSON**:
-
-```json
-{
-  "decision": "rejected",
-  "amount": null,
-  "justification": "The provided policy clauses do not contain any information regarding coverage for cataract."
-}
 ```
 
-**Referenced Clauses**:
+### 2. Set Up a Virtual Environment
 
-* Clause 1: "We cover maternity-related hospitalization expenses..."
-* Clause 2: "Air ambulance service is provided in emergency..."
+```
+# Create the virtual environment
+python -m venv venv
 
----
+# Activate it
+# On Windows
+venv\Scripts\activate
+# On macOS/Linux
+source venv/bin/activate
 
-## 🚰 How It Works
+```
 
-1. **Upload Endpoint** (`/upload_docs`) parses and chunks all uploaded files
-2. **Text is embedded** and stored in a FAISS index saved under `/data/session_<timestamp>/`
-3. **Query Endpoint** (`/query`) takes user query + session ID, retrieves relevant clauses, and forwards them to Gemini
-4. **Gemini generates** a JSON-based decision with reasoning and references
+### 3. Install Dependencies
 
----
+```
+pip install -r requirements.txt
 
-## 💡 Future Improvements
+```
 
-* Multi-user login & session history
-* Highlighting relevant source lines in UI
-* Exportable reports (PDF/JSON)
-* Analytics dashboard for policy trends
+### 4. Configure Your API Key
 
----
+Create a file named `.env` in the root directory of the project and add your Google Gemini API key to it.
 
-## 👨‍💻 Team
+```
+GEMINI_API_KEY="your-google-gemini-api-key"
 
-**Developer**: Anand Kumar
-**Hackathon**: Bajaj Finserv Hackathon 2025
+```
 
----
+### 5. Run the Application
 
-## 📬 Contact
+You need to run the backend and frontend in two separate terminals.
 
-Feel free to connect via [LinkedIn](https://linkedin.com/in/anand-kumar05) or email at: [anandambastha72@gmail.com](anandambastha72@gmail.com)
+**Terminal 1: Run the Backend**
+
+```
+python -m app.main
+
+```
+
+The backend server will start on `http://127.0.0.1:8000`.
+
+**Terminal 2: Run the Frontend**
+
+```
+streamlit run ui/app.py
+
+```
+
+The Streamlit application will open in your browser. You can now upload documents and start asking questions!

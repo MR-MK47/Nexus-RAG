@@ -1,132 +1,139 @@
 import streamlit as st
 import requests
-import json
 import os
 from dotenv import load_dotenv
 
-# The API_URL should point to your backend server
-API_URL = os.getenv('API_URL', 'http://127.0.0.1:8000')  # Allow configuring via environment variable
+# --- 1. INITIALIZATION & CONFIGURATION ---
 
-def check_api_health():
-    try:
-        response = requests.get(f"{API_URL}/health")  # Assuming there's a health check endpoint
-        return True
-    except:
-        return False
+def initialize_session():
+    """
+    Initializes the Streamlit session state. It gets a unique session ID
+    from the backend and sets up the message history.
+    """
+    if "session_id" not in st.session_state:
+        try:
+            # Request a new session ID from the backend API
+            response = requests.get("http://127.0.0.1:8000/start_session")
+            response.raise_for_status()
+            st.session_state.session_id = response.json()["session_id"]
+            st.session_state.messages = []
+        except requests.exceptions.RequestException as e:
+            # Display a persistent error if the backend is not available on startup
+            st.error(f"Fatal Error: Could not connect to the backend API. Please ensure the server is running. Details: {e}")
+            st.stop() # Halt the app if the backend isn't running
 
-# Load environment variables from a .env file if it exists
+# Load environment variables from the .env file
 load_dotenv()
 
-# --- Streamlit Page Configuration ---
-st.set_page_config(page_title="VeriSureAI", layout="wide")
+# Configure the Streamlit page
+st.set_page_config(page_title="Nexus RAG", page_icon="🚀", layout="wide")
 
-# --- Page Title and Description ---
-st.title("🧠 VeriSure AI - Your Own Policy Explainer")
-st.markdown("Upload your policy documents and ask any question about them.")
+# Initialize the session state
+initialize_session()
 
-# Check if API is accessible
-if not check_api_health():
-    st.error("⚠️ Cannot connect to the backend server. Please ensure the backend is running and accessible.")
-    st.stop()
 
-# --- File Upload Section ---
-st.subheader("📤 Upload Document")
-uploaded_file = st.file_uploader("Upload a PDF document", type=["pdf"])
+# --- 2. HEADER & INTRODUCTORY TEXT ---
 
-if uploaded_file:
-    # Use a spinner to indicate that processing is happening
-    with st.spinner("Uploading and indexing your document..."):
-        try:
-            # Prepare the file for the POST request
-            files = [("uploaded_files", (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type))]
-            
-            # Send the file to the backend API
-            response = requests.post(f"{API_URL}/upload_docs", files=files)
+st.title("Nexus RAG 🚀")
+st.header("Intelligent Query-Retrieval System")
+st.write("""
+Upload your insurance policy PDFs and get answers backed by direct evidence from the documents.
+This application uses a Retrieval-Augmented Generation (RAG) pipeline to provide accurate, context-aware responses.
+""")
 
-            # Check the response from the server
-            response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-            
-            data = response.json()
-            
-            st.success(data.get("message", "File uploaded and processed successfully!"))
 
-            # Store the session_id received from the backend in the Streamlit session state
-            session_id = data.get("session_id")
-            if session_id:
-                st.session_state["session_id"] = session_id
-                st.info(f"🔑 Your session ID is: `{session_id}`")
-            else:
-                st.error("Could not retrieve session ID from the server.")
+# --- 3. SIDEBAR FOR DOCUMENT UPLOADS ---
 
-        except requests.exceptions.RequestException as e:
-            st.error(f"Failed to connect to the backend API: {e}")
-        except Exception as e:
-            st.error(f"An error occurred during file upload: {e}")
+with st.sidebar:
+    st.header("Upload Your Documents")
+    uploaded_files = st.file_uploader(
+        "Upload PDF files and click 'Process'",
+        accept_multiple_files=True,
+        type="pdf"
+    )
 
-st.markdown("---")
+    if st.button("Process"):
+        if uploaded_files:
+            with st.spinner("Processing documents... This may take a moment."):
+                # Prepare files for the multipart/form-data request
+                files = [("uploaded_files", (file.name, file.getvalue(), file.type)) for file in uploaded_files]
+                
+                try:
+                    # Send files to the backend for processing and indexing
+                    response = requests.post(
+                        f"http://127.0.0.1:8000/upload_docs?session_id={st.session_state.session_id}",
+                        files=files
+                    )
+                    response.raise_for_status()
+                    st.success("Files processed successfully! You can now ask questions.")
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Error processing files: {e}")
+        else:
+            st.warning("Please upload at least one PDF file.")
 
-# --- Query Section ---
-st.subheader("🔍 Ask a Question")
-query = st.text_input("Enter your query in plain English", key="query_input")
 
-if st.button("Submit Query", key="submit_button"):
-    session_id = st.session_state.get("session_id")
+# --- 4. MAIN CHAT INTERFACE ---
 
-    if not query:
-        st.warning("Please enter a question.")
-    elif not session_id:
-        st.error("❗️ Please upload a document first to start a session.")
-    else:
+st.subheader("Chat with Your Documents")
+
+# Display the existing chat message history
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        # If the message is from the assistant, show the rationale and evidence
+        if message["role"] == "assistant":
+            if message.get("rationale"):
+                st.info(f"**Rationale:** {message['rationale']}")
+            with st.expander("Show Evidence"):
+                for i, chunk in enumerate(message.get("evidence", [])):
+                    st.info(f"Source {i+1}:\n\n{chunk}")
+
+# Handle new user input
+if prompt := st.chat_input("Ask a question about your documents..."):
+    # Add user's message to history and display it
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Get and display the assistant's response
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
         with st.spinner("Thinking..."):
             try:
-                # Prepare the JSON payload for the query
-                payload = {"query": query, "session_id": session_id}
-                
                 # Send the query to the backend API
-                response = requests.post(f"{API_URL}/query", json=payload)
+                response = requests.post(
+                    "http://127.0.0.1:8000/query",
+                    json={"query": prompt, "session_id": st.session_state.session_id}
+                )
                 response.raise_for_status()
+                
+                response_data = response.json()
+                answer = response_data.get("answer", "Sorry, I couldn't find an answer.")
+                rationale = response_data.get("decision_rationale")
+                evidence = response_data.get("source_clauses", [])
 
-                result = response.json()
+                # Display the main answer and rationale
+                message_placeholder.markdown(answer)
+                if rationale:
+                    st.info(f"**Rationale:** {rationale}")
 
-                if "error" in result:
-                    st.error(f"❌ Error from API: {result['error']}")
-                else:
-                    st.success("✅ AI Answer:")
-                    
-                    # Display the question
-                    st.markdown(f"**Your Question:** {result.get('query')}")
+                # Display the evidence in a collapsible section
+                with st.expander("Show Evidence"):
+                    if evidence:
+                        for i, chunk in enumerate(evidence):
+                            st.info(f"Source {i+1}:\n\n{chunk}")
+                    else:
+                        st.write("No specific evidence was used for this answer.")
+                
+                # Store the full response in session state for redisplay
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": answer, 
+                    "rationale": rationale, 
+                    "evidence": evidence
+                })
 
-                    # Display the formatted JSON answer
-                    response_text = result.get("response", "")
-                    try:
-                        # Try to parse and pretty-print the JSON response
-                        parsed_json = json.loads(response_text)
-                        st.json(parsed_json)
-                    except (json.JSONDecodeError, TypeError):
-                        # If it's not valid JSON, display it as plain text
-                        st.markdown("**Answer:**")
-                        st.markdown(response_text)
-
-                    # Display the referenced clauses
-                    retrieved_clauses = result.get("retrieved_clauses", [])
-                    if retrieved_clauses:
-                        st.markdown("---")
-                        st.markdown("### 🔎 Referenced Clauses")
-                        for i, clause in enumerate(retrieved_clauses):
-                            with st.expander(f"**Reference Clause {i+1}**"):
-                                st.code(clause, language="text")
-            
             except requests.exceptions.RequestException as e:
-                st.error(f"Failed to connect to the backend API: {e}")
-            except Exception as e:
-                st.error(f"An unknown error occurred: {e}")
-
-# --- Footer ---
-st.markdown(
-    """
-    <div style='position: fixed; bottom: 10px; right: 15px; color: #888; font-size: 0.75em;'>
-         Trinetra AI
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+                error_message = f"Error from backend: {e}"
+                message_placeholder.error(error_message)
+                st.session_state.messages.append({"role": "assistant", "content": error_message})

@@ -1,24 +1,38 @@
 import os
-import fitz #PyMuPDF
-import docx
+from typing import List
+from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredWordDocumentLoader
+from langchain.schema import Document
 
-def load_content(file_path: str) -> str:
-    if file_path.endswith(".pdf"):
-        return extract_pdf(file_path)
-    elif file_path.endswith(".docx"):
-        return extract_docx(file_path)
-    else:
-        raise ValueError("Unsupported file type. Only .pdf and .docx are supported.")
+# Mapping from file extension to document loader class
+LOADER_MAPPING = {
+    ".pdf": PyPDFLoader,
+    ".txt": TextLoader,
+    ".doc": UnstructuredWordDocumentLoader,
+    ".docx": UnstructuredWordDocumentLoader,
+}
 
-def extract_pdf(file_path):
-    text = ""
-    with fitz.open(file_path) as doc:
-        for page in doc:
-            text += page.get_text()
-    return text
+def load_documents(source_dir: str) -> List[Document]:
+    """
+    Loads all documents from the specified source directory, using the appropriate
+    loader for each file type.
+    """
+    all_files = []
+    for ext in LOADER_MAPPING:
+        # Find all files with the current extension
+        all_files.extend(
+            [os.path.join(source_dir, f) for f in os.listdir(source_dir) if f.endswith(ext)]
+        )
 
-def extract_docx(file_path):
-    doc = docx.Document(file_path)
-    return "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
-
-#print(load_content("data\\docs\\EDLHLGA23009V012223.pdf"))
+    documents = []
+    for file_path in all_files:
+        ext = os.path.splitext(file_path)[-1]
+        if ext in LOADER_MAPPING:
+            try:
+                loader_class = LOADER_MAPPING[ext]
+                loader = loader_class(file_path)
+                documents.extend(loader.load())
+            except Exception as e:
+                print(f"Error loading file {file_path}: {e}")
+                continue
+    
+    return documents

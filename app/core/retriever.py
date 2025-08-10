@@ -1,68 +1,66 @@
 import os
-import numpy as np
-import faiss
-import pickle
 import yaml
-from app.core.embedder import embed_texts
-from datetime import datetime
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from app.ingestion.load import load_documents
 
+# --- PATH & CONFIGURATION ---
+try:
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    CONFIG_PATH = os.path.join(PROJECT_ROOT, 'config', 'config.yaml')
+    with open(CONFIG_PATH, 'r') as f:
+        config = yaml.safe_load(f)
+except FileNotFoundError:
+    raise FileNotFoundError(f"Configuration file not found. Ensure 'config/config.yaml' exists.")
 
-with open("config/config.yaml") as f:
-    cfg = yaml.safe_load(f)
+# --- GLOBAL VARIABLES ---
+UI_VECTOR_STORE_PATH = os.path.join(PROJECT_ROOT, config['vector_store_path'])
+EMBEDDINGS = HuggingFaceEmbeddings(model_name=config['embedding_model'])
 
-def get_paths(session_id):
-    base_dir = os.path.join("data", f"session_{session_id}", "backup")
-    return {
-        "INDEX_PATH": os.path.join(base_dir, "faiss.index"),
-        "META_PATH": os.path.join(base_dir, "chunks.pkl")
-    }
+# --- MODULAR, REUSABLE FUNCTIONS ---
 
+def build_index_from_path(source_dir: str, vector_store_path: str):
+    """
+    Generic function to build a FAISS index from a source directory 
+    and save it to a specified path.
+    """
+    docs = load_documents(source_dir)
+    if not docs:
+        raise ValueError("No documents found to process in the source directory.")
 
-def normalize_embeddings(vectors):
-    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-    return vectors / norms
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=config['text_splitter']['chunk_size'],
+        chunk_overlap=config['text_splitter']['chunk_overlap']
+    )
+    texts = text_splitter.split_documents(docs)
+    
+    vector_store = FAISS.from_documents(texts, EMBEDDINGS)
+    os.makedirs(vector_store_path, exist_ok=True)
+    vector_store.save_local(vector_store_path)
 
-def build_index(text_chunks,session_id,force_rebuild):
-    paths = get_paths(session_id)
-    INDEX_PATH = paths["INDEX_PATH"]
-    META_PATH = paths["META_PATH"]
-    os.makedirs(os.path.dirname(INDEX_PATH), exist_ok=True)
+def retrieve_chunks_from_path(query: str, vector_store_path: str, k: int = 5) -> list[str]:
+    """
+    Generic function to retrieve document chunks from a FAISS index 
+    at a specified path.
+    """
+    if not os.path.exists(vector_store_path):
+        raise FileNotFoundError(f"Vector store not found at path: {vector_store_path}")
+        
+    vector_store = FAISS.load_local(vector_store_path, EMBEDDINGS, allow_dangerous_deserialization=True)
+    retriever = vector_store.as_retriever(search_kwargs={"k": k})
+    relevant_docs = retriever.invoke(query)
+    
+    return [doc.page_content for doc in relevant_docs]
 
-    if os.path.exists(INDEX_PATH) and os.path.exists(META_PATH) and not force_rebuild:
-        print("Index already exists.")
-        return
+# --- SESSION-BASED FUNCTIONS (For UI) ---
 
-    print("Building FAISS index...")
+def build_index(session_id: str, source_dir: str):
+    """Builds an index for a specific session (used by the UI)."""
+    session_vector_path = os.path.join(UI_VECTOR_STORE_PATH, session_id)
+    build_index_from_path(source_dir, session_vector_path)
 
-    vectors = embed_texts(text_chunks)
-    vectors = normalize_embeddings(np.array(vectors).astype("float32"))
-
-    dim = vectors.shape[1]
-    index = faiss.IndexFlatIP(dim) 
-
-    index.add(vectors)
-
-    faiss.write_index(index, INDEX_PATH)
-    with open(META_PATH, "wb") as f:
-        pickle.dump(text_chunks, f)
-
-    print("FAISS index saved.")
-
-def load_index(session_id):
-    paths = get_paths(session_id)
-    INDEX_PATH = paths["INDEX_PATH"]
-    META_PATH = paths["META_PATH"]
-
-    if not os.path.exists(INDEX_PATH):
-        raise FileNotFoundError("FAISS index not found.")
-    index = faiss.read_index(INDEX_PATH)
-    with open(META_PATH, "rb") as f:
-        chunks = pickle.load(f)
-    return index, chunks
-
-def retrieve_chunks(query,session_id, k=5):
-    index, chunks = load_index(session_id)
-    q_vec = embed_texts([query])
-    q_vec = normalize_embeddings(np.array(q_vec).astype("float32"))
-    _, I = index.search(q_vec, k)
-    return [chunks[i] for i in I[0]]
+def retrieve_chunks(query: str, session_id: str, k: int = 5) -> list[str]:
+    """Retrieves chunks for a specific session (used by the UI)."""
+    session_vector_path = os.path.join(UI_VECTOR_STORE_PATH, session_id)
+    return retrieve_chunks_from_path(query, session_vector_path, k)
