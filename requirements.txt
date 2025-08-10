@@ -7,6 +7,8 @@ gunicorn
 openai
 langchain
 langchain-community
+sentence-transformers
+langchain-huggingface
 
 # Document handling
 python-multipart
@@ -28,6 +30,7 @@ tiktoken>=0.9.0
 openai
 python-dotenv
 PyYAML
+
 
 
 
