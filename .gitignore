@@ -9,6 +9,5 @@ wheels/
 # Virtual environments
 .venv
 .env
-config/
 ui/app.txt
 data/docs/
